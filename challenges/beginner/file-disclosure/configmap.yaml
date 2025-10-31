@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: file-disclosure-config
+  namespace: file-disclosure
+data:
+  FLAG: "FLAG{path_traversal_escape_directories}"
+

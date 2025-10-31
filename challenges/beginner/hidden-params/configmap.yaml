@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hidden-params-config
+  namespace: hidden-params
+data:
+  APP_VERSION: "1.5.0"
+  ADMIN_TOKEN: "admin-token-secret"
+  DB_PASSWORD: "super-secret-db-password"
+  API_KEYS: "key-abc123,key-def456,key-ghi789"
+  FLAG: "FLAG{hidden_params_bypass_auth}"
+

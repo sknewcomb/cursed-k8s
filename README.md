@@ -67,6 +67,7 @@ cursed-k8s/
 │   └── grafana/
 ├── challenges/               # CTF challenges directory
 ├── examples/                 # Example vulnerable applications
+├── tools/                    # Testing toolkit for challenges
 └── docs/                     # Detailed documentation
     ├── INSTALL.md
     ├── MONITORING.md
@@ -90,6 +91,28 @@ cursed-k8s/
    ```bash
    kubectl apply -f challenges/your-challenge/
    ```
+
+Or deploy all beginner challenges at once:
+```bash
+./tools/deploy-all.sh
+```
+
+### Testing Challenges
+
+The project includes an automated testing toolkit to verify challenges work correctly:
+
+```bash
+# Install Python dependencies
+pip install -r tools/requirements.txt
+
+# Test all challenges
+python3 tools/test-challenges.py
+
+# Test a specific challenge
+python3 tools/test-challenges.py --challenge header-leak
+```
+
+See [tools/README.md](tools/README.md) for more details.
 
 ### Deploying Example Metrics Applications
 

@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hidden-params
+  namespace: hidden-params
+  labels:
+    app: hidden-params
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hidden-params
+  template:
+    metadata:
+      labels:
+        app: hidden-params
+    spec:
+      containers:
+      - name: web
+        image: python:3.11-slim
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            pip install Flask==3.0.0 &&
+            python /app/app.py
+        workingDir: /app
+        ports:
+        - containerPort: 8080
+          name: http
+        envFrom:
+        - configMapRef:
+            name: hidden-params-config
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        volumeMounts:
+        - name: app-code
+          mountPath: /app
+      volumes:
+      - name: app-code
+        configMap:
+          name: hidden-params-app-code
+

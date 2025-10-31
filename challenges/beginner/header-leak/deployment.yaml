@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: header-leak
+  namespace: header-leak
+  labels:
+    app: header-leak
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: header-leak
+  template:
+    metadata:
+      labels:
+        app: header-leak
+    spec:
+      containers:
+      - name: web
+        image: python:3.11-slim
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            pip install Flask==3.0.0 &&
+            python /app/app.py
+        workingDir: /app
+        ports:
+        - containerPort: 8080
+          name: http
+        envFrom:
+        - configMapRef:
+            name: header-leak-config
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        volumeMounts:
+        - name: app-code
+          mountPath: /app
+      volumes:
+      - name: app-code
+        configMap:
+          name: header-leak-app-code
+

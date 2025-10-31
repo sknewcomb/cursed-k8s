@@ -1,0 +1,164 @@
+#!/usr/bin/env python3
+"""
+Vulnerable Web Application - Path Traversal / File Disclosure
+This application allows reading files via path traversal vulnerability
+"""
+
+from flask import Flask, render_template_string, jsonify, request, send_file
+import os
+
+app = Flask(__name__)
+
+# HTML template for the web interface
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Document Viewer</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { color: #333; }
+        .info-box { background: #e8f4f8; padding: 15px; margin: 10px 0; border-radius: 4px; }
+        code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; }
+        input { padding: 8px; margin: 5px 0; width: 300px; }
+        button { padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📄 Document Viewer</h1>
+        <p>View documents and configuration files from the server.</p>
+        
+        <div class="info-box">
+            <h3>Read File</h3>
+            <form action="/api/read" method="GET">
+                <label for="file">File path:</label><br>
+                <input type="text" id="file" name="file" value="public/readme.txt" placeholder="Enter file path"><br>
+                <button type="submit">Read File</button>
+            </form>
+            <p><small>Try: public/readme.txt, public/config.txt</small></p>
+        </div>
+        
+        <div class="info-box">
+            <h3>API Endpoints</h3>
+            <ul>
+                <li><code>/api/read?file=path/to/file</code> - Read a file</li>
+                <li><code>/api/list?dir=path</code> - List directory contents</li>
+            </ul>
+        </div>
+        
+        <div class="info-box">
+            <p><em>Note: Only public documents are accessible.</em></p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+@app.route('/')
+def index():
+    """Main page"""
+    return render_template_string(HTML_TEMPLATE)
+
+@app.route('/api/read')
+def read_file():
+    """Read file endpoint - VULNERABLE to path traversal!"""
+    file_path = request.args.get('file', '')
+    
+    if not file_path:
+        return jsonify({'error': 'No file specified'}), 400
+    
+    # SECURITY MISCONFIGURATION: Insufficient path validation
+    # The application only checks if the path starts with "public/"
+    # but doesn't prevent path traversal sequences like "../"
+    
+    # Use /tmp/data instead of /app/data since /app is read-only (ConfigMap mount)
+    base_dir = '/tmp/data'
+    
+    # Naive protection that can be bypassed
+    if not file_path.startswith('public/'):
+        return jsonify({'error': 'Access denied: Only public files are accessible'}), 403
+    
+    # Construct full path - VULNERABLE!
+    full_path = os.path.join(base_dir, file_path)
+    
+    # Normalize the path (but too late - the check above already failed for ../)
+    # However, we can still use path traversal by starting with "public/../"
+    normalized_path = os.path.normpath(full_path)
+    
+    # Check if path is still within base_dir (weak check)
+    if not normalized_path.startswith(os.path.abspath(base_dir)):
+        # This check can be bypassed if we use enough "../" sequences
+        try:
+            # Try to read the file anyway
+            with open(normalized_path, 'r') as f:
+                content = f.read()
+            return jsonify({
+                'file': file_path,
+                'content': content
+            })
+        except Exception as e:
+            return jsonify({'error': f'Error reading file: {str(e)}'}), 500
+    
+    # Normal file read
+    try:
+        with open(normalized_path, 'r') as f:
+            content = f.read()
+        return jsonify({
+            'file': file_path,
+            'content': content
+        })
+    except FileNotFoundError:
+        return jsonify({'error': 'File not found'}), 404
+    except Exception as e:
+        return jsonify({'error': f'Error reading file: {str(e)}'}), 500
+
+@app.route('/api/list')
+def list_directory():
+    """List directory endpoint"""
+    dir_path = request.args.get('dir', 'public')
+    
+    # Use /tmp/data instead of /app/data since /app is read-only (ConfigMap mount)
+    base_dir = '/tmp/data'
+    full_path = os.path.join(base_dir, dir_path)
+    normalized_path = os.path.normpath(full_path)
+    
+    if not normalized_path.startswith(os.path.abspath(base_dir)):
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        files = os.listdir(normalized_path)
+        return jsonify({
+            'directory': dir_path,
+            'files': files
+        })
+    except Exception as e:
+        return jsonify({'error': f'Error listing directory: {str(e)}'}), 500
+
+@app.route('/health')
+def health():
+    """Health check endpoint"""
+    return jsonify({'status': 'healthy'}), 200
+
+if __name__ == '__main__':
+    # Create data directory structure
+    # Use /tmp/data instead of /app/data since /app is mounted read-only from ConfigMap
+    data_dir = '/tmp/data'
+    os.makedirs(f'{data_dir}/public', exist_ok=True)
+    os.makedirs(f'{data_dir}/private', exist_ok=True)
+    
+    # Create some public files
+    with open(f'{data_dir}/public/readme.txt', 'w') as f:
+        f.write('This is a public readme file.\nNothing sensitive here.')
+    
+    with open(f'{data_dir}/public/config.txt', 'w') as f:
+        f.write('app_name: document_viewer\nversion: 1.0\n')
+    
+    # Create a flag file (should be private but accessible via path traversal)
+    flag = os.getenv('FLAG', 'FLAG{path_traversal_is_dangerous}')
+    with open(f'{data_dir}/private/flag.txt', 'w') as f:
+        f.write(flag)
+    
+    app.run(host='0.0.0.0', port=8080, debug=True)
+
