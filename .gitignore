@@ -1,0 +1,39 @@
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Kubernetes kubeconfig (may contain sensitive info)
+# Uncomment if you don't want to track kubeconfig
+# k3s.yaml
+# .kube/config
+
+# Temporary files
+*.tmp
+*.log
+*.bak
+
+# Environment files
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Node modules (if any)
+node_modules/
+
+# Build artifacts
+*.o
+*.a
+

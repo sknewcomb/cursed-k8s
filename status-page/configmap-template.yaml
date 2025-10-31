@@ -1,0 +1,214 @@
+apiVersion: v1
+data:
+  index.html: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n
+    \   <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n
+    \   <title>K3s Application Status Monitor</title>\n    <style>\n        * {\n
+    \           margin: 0;\n            padding: 0;\n            box-sizing: border-box;\n
+    \       }\n        \n        body {\n            font-family: -apple-system, BlinkMacSystemFont,
+    'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;\n            background:
+    linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n            color: #333;\n
+    \           min-height: 100vh;\n            padding: 20px;\n        }\n        \n
+    \       .container {\n            max-width: 1400px;\n            margin: 0 auto;\n
+    \       }\n        \n        header {\n            background: white;\n            padding:
+    20px 30px;\n            border-radius: 10px;\n            margin-bottom: 20px;\n
+    \           box-shadow: 0 4px 6px rgba(0,0,0,0.1);\n            display: flex;\n
+    \           justify-content: space-between;\n            align-items: center;\n
+    \       }\n        \n        h1 {\n            color: #667eea;\n            font-size:
+    28px;\n        }\n        \n        .last-update {\n            color: #666;\n
+    \           font-size: 14px;\n        }\n        \n        .summary {\n            display:
+    grid;\n            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));\n
+    \           gap: 20px;\n            margin-bottom: 20px;\n        }\n        \n
+    \       .summary-card {\n            background: white;\n            padding:
+    20px;\n            border-radius: 10px;\n            box-shadow: 0 4px 6px rgba(0,0,0,0.1);\n
+    \       }\n        \n        .summary-card h3 {\n            color: #667eea;\n
+    \           margin-bottom: 10px;\n            font-size: 14px;\n            text-transform:
+    uppercase;\n            letter-spacing: 1px;\n        }\n        \n        .summary-card
+    .value {\n            font-size: 36px;\n            font-weight: bold;\n            color:
+    #333;\n        }\n        \n        .summary-card.healthy .value { color: #10b981;
+    }\n        .summary-card.degraded .value { color: #f59e0b; }\n        .summary-card.unavailable
+    .value { color: #ef4444; }\n        \n        .section {\n            background:
+    white;\n            padding: 30px;\n            border-radius: 10px;\n            margin-bottom:
+    20px;\n            box-shadow: 0 4px 6px rgba(0,0,0,0.1);\n        }\n        \n
+    \       .section h2 {\n            color: #667eea;\n            margin-bottom:
+    20px;\n            font-size: 22px;\n        }\n        \n        .deployment-card,
+    .service-card {\n            background: #f9fafb;\n            border-left: 4px
+    solid #667eea;\n            padding: 20px;\n            margin-bottom: 15px;\n
+    \           border-radius: 5px;\n            transition: transform 0.2s, box-shadow
+    0.2s;\n        }\n        \n        .deployment-card:hover, .service-card:hover
+    {\n            transform: translateY(-2px);\n            box-shadow: 0 6px 12px
+    rgba(0,0,0,0.1);\n        }\n        \n        .deployment-header, .service-header
+    {\n            display: flex;\n            justify-content: space-between;\n            align-items:
+    center;\n            margin-bottom: 15px;\n        }\n        \n        .deployment-name
+    {\n            font-size: 18px;\n            font-weight: bold;\n            color:
+    #333;\n        }\n        \n        .namespace {\n            color: #666;\n            font-size:
+    14px;\n            background: #e5e7eb;\n            padding: 4px 10px;\n            border-radius:
+    12px;\n        }\n        \n        .status-badge {\n            padding: 6px
+    12px;\n            border-radius: 20px;\n            font-size: 12px;\n            font-weight:
+    bold;\n            text-transform: uppercase;\n        }\n        \n        .status-healthy
+    {\n            background: #d1fae5;\n            color: #065f46;\n        }\n
+    \       \n        .status-degraded {\n            background: #fef3c7;\n            color:
+    #92400e;\n        }\n        \n        .status-unavailable {\n            background:
+    #fee2e2;\n            color: #991b1b;\n        }\n        \n        .status-updating
+    {\n            background: #dbeafe;\n            color: #1e40af;\n        }\n
+    \       \n        .status-updated {\n            background: #d1fae5;\n            color:
+    #065f46;\n        }\n        \n        .deployment-info {\n            display:
+    grid;\n            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));\n
+    \           gap: 15px;\n            margin-top: 15px;\n        }\n        \n        .info-item
+    {\n            background: white;\n            padding: 12px;\n            border-radius:
+    5px;\n        }\n        \n        .info-item label {\n            display: block;\n
+    \           font-size: 12px;\n            color: #666;\n            margin-bottom:
+    5px;\n        }\n        \n        .info-item .value {\n            font-size:
+    16px;\n            font-weight: bold;\n            color: #333;\n        }\n        \n
+    \       .pods-list {\n            margin-top: 15px;\n        }\n        \n        .pod-item
+    {\n            background: white;\n            padding: 10px;\n            margin:
+    5px 0;\n            border-radius: 5px;\n            display: flex;\n            justify-content:
+    space-between;\n            align-items: center;\n            font-size: 14px;\n
+    \       }\n        \n        .pod-status {\n            padding: 4px 8px;\n            border-radius:
+    12px;\n            font-size: 11px;\n        }\n        \n        .pod-running
+    {\n            background: #d1fae5;\n            color: #065f46;\n        }\n
+    \       \n        .pod-pending {\n            background: #fef3c7;\n            color:
+    #92400e;\n        }\n        \n        .pod-failed {\n            background:
+    #fee2e2;\n            color: #991b1b;\n        }\n        \n        .loading {\n
+    \           text-align: center;\n            padding: 40px;\n            color:
+    #666;\n        }\n        \n        .error {\n            background: #fee2e2;\n
+    \           color: #991b1b;\n            padding: 20px;\n            border-radius:
+    5px;\n            margin: 20px 0;\n        }\n        \n        .refresh-btn {\n
+    \           background: #667eea;\n            color: white;\n            border:
+    none;\n            padding: 10px 20px;\n            border-radius: 5px;\n            cursor:
+    pointer;\n            font-size: 14px;\n            transition: background 0.2s;\n
+    \       }\n        \n        .refresh-btn:hover {\n            background: #5568d3;\n
+    \       }\n        \n        .refresh-btn:disabled {\n            background:
+    #ccc;\n            cursor: not-allowed;\n        }\n        \n        .filter-bar
+    {\n            margin-bottom: 20px;\n            display: flex;\n            gap:
+    10px;\n            align-items: center;\n        }\n        \n        .filter-bar
+    input {\n            flex: 1;\n            padding: 10px;\n            border:
+    2px solid #e5e7eb;\n            border-radius: 5px;\n            font-size: 14px;\n
+    \       }\n        \n        .filter-bar select {\n            padding: 10px;\n
+    \           border: 2px solid #e5e7eb;\n            border-radius: 5px;\n            font-size:
+    14px;\n        }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n
+    \       <header>\n            <div>\n                <h1>\U0001F680 K3s Application
+    Status Monitor</h1>\n                <div class=\"last-update\" id=\"lastUpdate\">Loading...</div>\n
+    \           </div>\n            <button class=\"refresh-btn\" onclick=\"loadStatus()\">\U0001F504
+    Refresh</button>\n        </header>\n        \n        <div class=\"summary\"
+    id=\"summary\">\n            <div class=\"loading\">Loading summary...</div>\n
+    \       </div>\n        \n        <div class=\"section\">\n            <h2>\U0001F4E6
+    Deployments</h2>\n            <div class=\"filter-bar\">\n                <input
+    type=\"text\" id=\"deploymentFilter\" placeholder=\"\U0001F50D Filter deployments...\"
+    onkeyup=\"filterDeployments()\">\n                <select id=\"statusFilter\"
+    onchange=\"filterDeployments()\">\n                    <option value=\"\">All
+    Status</option>\n                    <option value=\"Healthy\">Healthy</option>\n
+    \                   <option value=\"Degraded\">Degraded</option>\n                    <option
+    value=\"Unavailable\">Unavailable</option>\n                </select>\n            </div>\n
+    \           <div id=\"deployments\">\n                <div class=\"loading\">Loading
+    deployments...</div>\n            </div>\n        </div>\n        \n        <div
+    class=\"section\">\n            <h2>\U0001F310 Services</h2>\n            <div
+    class=\"filter-bar\">\n                <input type=\"text\" id=\"serviceFilter\"
+    placeholder=\"\U0001F50D Filter services...\" onkeyup=\"filterServices()\">\n
+    \           </div>\n            <div id=\"services\">\n                <div class=\"loading\">Loading
+    services...</div>\n            </div>\n        </div>\n    </div>\n    \n    <script>\n
+    \       let statusData = null;\n        \n        function loadStatus() {\n            const
+    btn = document.querySelector('.refresh-btn');\n            btn.disabled = true;\n
+    \           btn.textContent = '\U0001F504 Loading...';\n            \n            fetch('/api/status')\n
+    \               .then(response => response.json())\n                .then(data
+    => {\n                    statusData = data;\n                    renderSummary(data);\n
+    \                   renderDeployments(data.deployments);\n                    renderServices(data.services);\n
+    \                   document.getElementById('lastUpdate').textContent = `Last
+    updated: ${new Date(data.timestamp).toLocaleString()}`;\n                })\n
+    \               .catch(error => {\n                    console.error('Error loading
+    status:', error);\n                    document.getElementById('deployments').innerHTML
+    = \n                        '<div class=\"error\">Error loading status. Make sure
+    the status page has proper Kubernetes API access.</div>';\n                })\n
+    \               .finally(() => {\n                    btn.disabled = false;\n
+    \                   btn.textContent = '\U0001F504 Refresh';\n                });\n
+    \       }\n        \n        function renderSummary(data) {\n            const
+    summary = data.summary;\n            document.getElementById('summary').innerHTML
+    = `\n                <div class=\"summary-card\">\n                    <h3>Total
+    Deployments</h3>\n                    <div class=\"value\">${summary.total_deployments}</div>\n
+    \               </div>\n                <div class=\"summary-card healthy\">\n
+    \                   <h3>Healthy</h3>\n                    <div class=\"value\">${summary.healthy_deployments}</div>\n
+    \               </div>\n                <div class=\"summary-card degraded\">\n
+    \                   <h3>Degraded</h3>\n                    <div class=\"value\">${summary.degraded_deployments}</div>\n
+    \               </div>\n                <div class=\"summary-card\">\n                    <h3>Total
+    Services</h3>\n                    <div class=\"value\">${summary.total_services}</div>\n
+    \               </div>\n            `;\n        }\n        \n        function
+    renderDeployments(deployments) {\n            const container = document.getElementById('deployments');\n
+    \           if (deployments.length === 0) {\n                container.innerHTML
+    = '<div class=\"loading\">No deployments found</div>';\n                return;\n
+    \           }\n            \n            container.innerHTML = deployments.map(deployment
+    => {\n                const statusClass = `status-${deployment.status.toLowerCase()}`;\n
+    \               const updateStatusClass = deployment.update_status === 'Updating'
+    ? 'status-updating' : 'status-updated';\n                \n                const
+    podsHtml = deployment.pods.map(pod => {\n                    const podStatusClass
+    = `pod-${pod.status.toLowerCase()}`;\n                    return `\n                        <div
+    class=\"pod-item\">\n                            <span><strong>${pod.name}</strong></span>\n
+    \                           <div>\n                                <span class=\"pod-status
+    ${podStatusClass}\">${pod.status}</span>\n                                ${pod.restarts
+    > 0 ? `<span style=\"margin-left: 10px; color: #f59e0b;\">⚠️ ${pod.restarts} restarts</span>`
+    : ''}\n                            </div>\n                        </div>\n                    `;\n
+    \               }).join('');\n                \n                return `\n                    <div
+    class=\"deployment-card\" data-name=\"${deployment.name}\" data-status=\"${deployment.status}\">\n
+    \                       <div class=\"deployment-header\">\n                            <div>\n
+    \                               <div class=\"deployment-name\">${deployment.name}</div>\n
+    \                               <span class=\"namespace\">${deployment.namespace}</span>\n
+    \                           </div>\n                            <div>\n                                <span
+    class=\"status-badge ${statusClass}\">${deployment.status}</span>\n                                <span
+    class=\"status-badge ${updateStatusClass}\" style=\"margin-left: 10px;\">${deployment.update_status}</span>\n
+    \                           </div>\n                        </div>\n                        <div
+    class=\"deployment-info\">\n                            <div class=\"info-item\">\n
+    \                               <label>Replicas</label>\n                                <div
+    class=\"value\">${deployment.replicas.ready} / ${deployment.replicas.desired}</div>\n
+    \                           </div>\n                            <div class=\"info-item\">\n
+    \                               <label>Available</label>\n                                <div
+    class=\"value\">${deployment.replicas.available}</div>\n                            </div>\n
+    \                           <div class=\"info-item\">\n                                <label>Images</label>\n
+    \                               <div class=\"value\" style=\"font-size: 12px;\">${deployment.images.join(',
+    ')}</div>\n                            </div>\n                        </div>\n
+    \                       ${deployment.pods.length > 0 ? `\n                            <div
+    class=\"pods-list\">\n                                <strong style=\"display:
+    block; margin-bottom: 10px;\">Pods:</strong>\n                                ${podsHtml}\n
+    \                           </div>\n                        ` : ''}\n                    </div>\n
+    \               `;\n            }).join('');\n        }\n        \n        function
+    renderServices(services) {\n            const container = document.getElementById('services');\n
+    \           if (services.length === 0) {\n                container.innerHTML
+    = '<div class=\"loading\">No services found</div>';\n                return;\n
+    \           }\n            \n            container.innerHTML = services.map(service
+    => {\n                const statusClass = service.status === 'Available' ? 'status-healthy'
+    : 'status-unavailable';\n                \n                return `\n                    <div
+    class=\"service-card\" data-name=\"${service.name}\">\n                        <div
+    class=\"deployment-header\">\n                            <div>\n                                <div
+    class=\"deployment-name\">${service.name}</div>\n                                <span
+    class=\"namespace\">${service.namespace}</span>\n                            </div>\n
+    \                           <div>\n                                <span class=\"status-badge
+    ${statusClass}\">${service.status}</span>\n                            </div>\n
+    \                       </div>\n                        <div class=\"deployment-info\">\n
+    \                           <div class=\"info-item\">\n                                <label>Type</label>\n
+    \                               <div class=\"value\">${service.type}</div>\n                            </div>\n
+    \                           <div class=\"info-item\">\n                                <label>Ports</label>\n
+    \                               <div class=\"value\">${service.ports.join(', ')
+    || 'N/A'}</div>\n                            </div>\n                            <div
+    class=\"info-item\">\n                                <label>Endpoints</label>\n
+    \                               <div class=\"value\">${service.endpoints}</div>\n
+    \                           </div>\n                            <div class=\"info-item\">\n
+    \                               <label>Cluster IP</label>\n                                <div
+    class=\"value\" style=\"font-size: 12px;\">${service.cluster_ip}</div>\n                            </div>\n
+    \                       </div>\n                    </div>\n                `;\n
+    \           }).join('');\n        }\n        \n        function filterDeployments()
+    {\n            const filter = document.getElementById('deploymentFilter').value.toLowerCase();\n
+    \           const statusFilter = document.getElementById('statusFilter').value;\n
+    \           const cards = document.querySelectorAll('.deployment-card');\n            \n
+    \           cards.forEach(card => {\n                const name = card.dataset.name.toLowerCase();\n
+    \               const status = card.dataset.status;\n                const matchesName
+    = name.includes(filter);\n                const matchesStatus = !statusFilter
+    || status === statusFilter;\n                \n                card.style.display
+    = (matchesName && matchesStatus) ? 'block' : 'none';\n            });\n        }\n
+    \       \n        function filterServices() {\n            const filter = document.getElementById('serviceFilter').value.toLowerCase();\n
+    \           const cards = document.querySelectorAll('.service-card');\n            \n
+    \           cards.forEach(card => {\n                const name = card.dataset.name.toLowerCase();\n
+    \               card.style.display = name.includes(filter) ? 'block' : 'none';\n
+    \           });\n        }\n        \n        // Load status on page load\n        loadStatus();\n
+    \       \n        // Auto-refresh every 30 seconds\n        setInterval(loadStatus,
+    30000);\n    </script>\n</body>\n</html>\n\n"
+kind: ConfigMap
+metadata:
+  name: status-page-template
+  namespace: monitoring

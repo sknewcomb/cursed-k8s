@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-webapp
+  namespace: default
+  labels:
+    app: simple-webapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: simple-webapp
+  template:
+    metadata:
+      labels:
+        app: simple-webapp
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: webapp
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        # Example: Volume mount that could be exploited
+        # volumeMounts:
+        # - name: host-root
+        #   mountPath: /host
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: simple-webapp
+  namespace: default
+spec:
+  type: NodePort
+  ports:
+  - port: 80
+    targetPort: 80
+    nodePort: 30080
+    protocol: TCP
+  selector:
+    app: simple-webapp
+

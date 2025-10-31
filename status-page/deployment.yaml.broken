@@ -1,0 +1,550 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: status-page
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: status-page
+rules:
+- apiGroups: [""]
+  resources:
+  - pods
+  - services
+  - endpoints
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources:
+  - deployments
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: status-page
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: status-page
+subjects:
+- kind: ServiceAccount
+  name: status-page
+  namespace: monitoring
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: status-page
+  namespace: monitoring
+  labels:
+    app: status-page
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: status-page
+  template:
+    metadata:
+      labels:
+        app: status-page
+    spec:
+      serviceAccountName: status-page
+      containers:
+      - name: status-page
+        image: python:3.11-slim
+        command: ["/bin/sh"]
+        args:
+        - -c
+        - |
+          pip install --no-cache-dir Flask==3.0.0 kubernetes==28.1.0 && python3 /app/app.py
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+          <html lang=\"en\">
+          <head>
+              <meta charset=\"UTF-8\">
+              <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+              <title>K3s Application Status Monitor</title>
+              <style>
+                  * { margin: 0; padding: 0; box-sizing: border-box; }
+                  body {
+                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      color: #333;
+                      min-height: 100vh;
+                      padding: 20px;
+                  }
+                  .container { max-width: 1400px; margin: 0 auto; }
+                  header {
+                      background: white;
+                      padding: 20px 30px;
+                      border-radius: 10px;
+                      margin-bottom: 20px;
+                      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                      display: flex;
+                      justify-content: space-between;
+                      align-items: center;
+                  }
+                  h1 { color: #667eea; font-size: 28px; }
+                  .last-update { color: #666; font-size: 14px; }
+                  .summary {
+                      display: grid;
+                      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                      gap: 20px;
+                      margin-bottom: 20px;
+                  }
+                  .summary-card {
+                      background: white;
+                      padding: 20px;
+                      border-radius: 10px;
+                      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                  }
+                  .summary-card h3 {
+                      color: #667eea;
+                      margin-bottom: 10px;
+                      font-size: 14px;
+                      text-transform: uppercase;
+                      letter-spacing: 1px;
+                  }
+                  .summary-card .value {
+                      font-size: 36px;
+                      font-weight: bold;
+                      color: #333;
+                  }
+                  .summary-card.healthy .value { color: #10b981; }
+                  .summary-card.degraded .value { color: #f59e0b; }
+                  .section {
+                      background: white;
+                      padding: 30px;
+                      border-radius: 10px;
+                      margin-bottom: 20px;
+                      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                  }
+                  .section h2 {
+                      color: #667eea;
+                      margin-bottom: 20px;
+                      font-size: 22px;
+                  }
+                  .deployment-card, .service-card {
+                      background: #f9fafb;
+                      border-left: 4px solid #667eea;
+                      padding: 20px;
+                      margin-bottom: 15px;
+                      border-radius: 5px;
+                      transition: transform 0.2s;
+                  }
+                  .deployment-card:hover, .service-card:hover {
+                      transform: translateY(-2px);
+                      box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+                  }
+                  .deployment-header {
+                      display: flex;
+                      justify-content: space-between;
+                      align-items: center;
+                      margin-bottom: 15px;
+                  }
+                  .deployment-name {
+                      font-size: 18px;
+                      font-weight: bold;
+                      color: #333;
+                  }
+                  .namespace {
+                      color: #666;
+                      font-size: 14px;
+                      background: #e5e7eb;
+                      padding: 4px 10px;
+                      border-radius: 12px;
+                      margin-left: 10px;
+                  }
+                  .status-badge {
+                      padding: 6px 12px;
+                      border-radius: 20px;
+                      font-size: 12px;
+                      font-weight: bold;
+                      text-transform: uppercase;
+                      margin-left: 10px;
+                  }
+                  .status-healthy { background: #d1fae5; color: #065f46; }
+                  .status-degraded { background: #fef3c7; color: #92400e; }
+                  .status-unavailable { background: #fee2e2; color: #991b1b; }
+                  .status-updating { background: #dbeafe; color: #1e40af; }
+                  .status-updated { background: #d1fae5; color: #065f46; }
+                  .deployment-info {
+                      display: grid;
+                      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                      gap: 15px;
+                      margin-top: 15px;
+                  }
+                  .info-item {
+                      background: white;
+                      padding: 12px;
+                      border-radius: 5px;
+                  }
+                  .info-item label {
+                      display: block;
+                      font-size: 12px;
+                      color: #666;
+                      margin-bottom: 5px;
+                  }
+                  .info-item .value {
+                      font-size: 16px;
+                      font-weight: bold;
+                      color: #333;
+                  }
+                  .pods-list { margin-top: 15px; }
+                  .pod-item {
+                      background: white;
+                      padding: 10px;
+                      margin: 5px 0;
+                      border-radius: 5px;
+                      display: flex;
+                      justify-content: space-between;
+                      align-items: center;
+                      font-size: 14px;
+                  }
+                  .pod-status {
+                      padding: 4px 8px;
+                      border-radius: 12px;
+                      font-size: 11px;
+                  }
+                  .pod-running { background: #d1fae5; color: #065f46; }
+                  .pod-pending { background: #fef3c7; color: #92400e; }
+                  .pod-failed { background: #fee2e2; color: #991b1b; }
+                  .loading { text-align: center; padding: 40px; color: #666; }
+                  .error {
+                      background: #fee2e2;
+                      color: #991b1b;
+                      padding: 20px;
+                      border-radius: 5px;
+                      margin: 20px 0;
+                  }
+                  .refresh-btn {
+                      background: #667eea;
+                      color: white;
+                      border: none;
+                      padding: 10px 20px;
+                      border-radius: 5px;
+                      cursor: pointer;
+                      font-size: 14px;
+                      transition: background 0.2s;
+                  }
+                  .refresh-btn:hover { background: #5568d3; }
+                  .refresh-btn:disabled { background: #ccc; cursor: not-allowed; }
+                  .filter-bar {
+                      margin-bottom: 20px;
+                      display: flex;
+                      gap: 10px;
+                      align-items: center;
+                  }
+                  .filter-bar input {
+                      flex: 1;
+                      padding: 10px;
+                      border: 2px solid #e5e7eb;
+                      border-radius: 5px;
+                      font-size: 14px;
+                  }
+                  .filter-bar select {
+                      padding: 10px;
+                      border: 2px solid #e5e7eb;
+                      border-radius: 5px;
+                      font-size: 14px;
+                  }
+              </style>
+          </head>
+          <body>
+              <div class=\"container\">
+                  <header>
+                      <div>
+                          <h1>🚀 K3s Application Status Monitor</h1>
+                          <div class=\"last-update\" id=\"lastUpdate\">Loading...</div>
+                      </div>
+                      <button class=\"refresh-btn\" onclick=\"loadStatus()\">🔄 Refresh</button>
+                  </header>
+                  
+                  <div class=\"summary\" id=\"summary\">
+                      <div class=\"loading\">Loading summary...</div>
+                  </div>
+                  
+                  <div class=\"section\">
+                      <h2>📦 Deployments</h2>
+                      <div class=\"filter-bar\">
+                          <input type=\"text\" id=\"deploymentFilter\" placeholder=\"🔍 Filter deployments...\" onkeyup=\"filterDeployments()\">
+                          <select id=\"statusFilter\" onchange=\"filterDeployments()\">
+                              <option value=\"\">All Status</option>
+                              <option value=\"Healthy\">Healthy</option>
+                              <option value=\"Degraded\">Degraded</option>
+                              <option value=\"Unavailable\">Unavailable</option>
+                          </select>
+                      </div>
+                      <div id=\"deployments\">
+                          <div class=\"loading\">Loading deployments...</div>
+                      </div>
+                  </div>
+                  
+                  <div class=\"section\">
+                      <h2>🌐 Services</h2>
+                      <div class=\"filter-bar\">
+                          <input type=\"text\" id=\"serviceFilter\" placeholder=\"🔍 Filter services...\" onkeyup=\"filterServices()\">
+                      </div>
+                      <div id=\"services\">
+                          <div class=\"loading\">Loading services...</div>
+                      </div>
+                  </div>
+              </div>
+              
+              <script>
+                  let statusData = null;
+                  
+                  function loadStatus() {
+                      const btn = document.querySelector('.refresh-btn');
+                      btn.disabled = true;
+                      btn.textContent = '🔄 Loading...';
+                      
+                      fetch('/api/status')
+                          .then(response => response.json())
+                          .then(data => {
+                              statusData = data;
+                              renderSummary(data);
+                              renderDeployments(data.deployments);
+                              renderServices(data.services);
+                              document.getElementById('lastUpdate').textContent = `Last updated: ${new Date(data.timestamp).toLocaleString()}`;
+                          })
+                          .catch(error => {
+                              console.error('Error loading status:', error);
+                              document.getElementById('deployments').innerHTML = 
+                                  '<div class=\"error\">Error loading status. Make sure the status page has proper Kubernetes API access.</div>';
+                          })
+                          .finally(() => {
+                              btn.disabled = false;
+                              btn.textContent = '🔄 Refresh';
+                          });
+                  }
+                  
+                  function renderSummary(data) {
+                      const summary = data.summary;
+                      document.getElementById('summary').innerHTML = `
+                          <div class=\"summary-card\">
+                              <h3>Total Deployments</h3>
+                              <div class=\"value\">${summary.total_deployments}</div>
+                          </div>
+                          <div class=\"summary-card healthy\">
+                              <h3>Healthy</h3>
+                              <div class=\"value\">${summary.healthy_deployments}</div>
+                          </div>
+                          <div class=\"summary-card degraded\">
+                              <h3>Degraded</h3>
+                              <div class=\"value\">${summary.degraded_deployments}</div>
+                          </div>
+                          <div class=\"summary-card\">
+                              <h3>Total Services</h3>
+                              <div class=\"value\">${summary.total_services}</div>
+                          </div>
+                      `;
+                  }
+                  
+                  function renderDeployments(deployments) {
+                      const container = document.getElementById('deployments');
+                      if (deployments.length === 0) {
+                          container.innerHTML = '<div class=\"loading\">No deployments found</div>';
+                          return;
+                      }
+                      
+                      container.innerHTML = deployments.map(deployment => {
+                          const statusClass = `status-${deployment.status.toLowerCase()}`;
+                          const updateStatusClass = deployment.update_status === 'Updating' ? 'status-updating' : 'status-updated';
+                          
+                          const podsHtml = deployment.pods.map(pod => {
+                              const podStatusClass = `pod-${pod.status.toLowerCase()}`;
+                              return `
+                                  <div class=\"pod-item\">
+                                      <span><strong>${pod.name}</strong></span>
+                                      <div>
+                                          <span class=\"pod-status ${podStatusClass}\">${pod.status}</span>
+                                          ${pod.restarts > 0 ? `<span style=\"margin-left: 10px; color: #f59e0b;\">⚠️ ${pod.restarts} restarts</span>` : ''}
+                                      </div>
+                                  </div>
+                              `;
+                          }).join('');
+                          
+                          return `
+                              <div class=\"deployment-card\" data-name=\"${deployment.name}\" data-status=\"${deployment.status}\">
+                                  <div class=\"deployment-header\">
+                                      <div>
+                                          <div class=\"deployment-name\">${deployment.name}</div>
+                                          <span class=\"namespace\">${deployment.namespace}</span>
+                                      </div>
+                                      <div>
+                                          <span class=\"status-badge ${statusClass}\">${deployment.status}</span>
+                                          <span class=\"status-badge ${updateStatusClass}\" style=\"margin-left: 10px;\">${deployment.update_status}</span>
+                                      </div>
+                                  </div>
+                                  <div class=\"deployment-info\">
+                                      <div class=\"info-item\">
+                                          <label>Replicas</label>
+                                          <div class=\"value\">${deployment.replicas.ready} / ${deployment.replicas.desired}</div>
+                                      </div>
+                                      <div class=\"info-item\">
+                                          <label>Available</label>
+                                          <div class=\"value\">${deployment.replicas.available}</div>
+                                      </div>
+                                      <div class=\"info-item\">
+                                          <label>Images</label>
+                                          <div class=\"value\" style=\"font-size: 12px;\">${deployment.images.join(', ')}</div>
+                                      </div>
+                                  </div>
+                                  ${deployment.pods.length > 0 ? `
+                                      <div class=\"pods-list\">
+                                          <strong style=\"display: block; margin-bottom: 10px;\">Pods:</strong>
+                                          ${podsHtml}
+                                      </div>
+                                  ` : ''}
+                              </div>
+                          `;
+                      }).join('');
+                  }
+                  
+                  function renderServices(services) {
+                      const container = document.getElementById('services');
+                      if (services.length === 0) {
+                          container.innerHTML = '<div class=\"loading\">No services found</div>';
+                          return;
+                      }
+                      
+                      container.innerHTML = services.map(service => {
+                          const statusClass = service.status === 'Available' ? 'status-healthy' : 'status-unavailable';
+                          
+                          return `
+                              <div class=\"service-card\" data-name=\"${service.name}\">
+                                  <div class=\"deployment-header\">
+                                      <div>
+                                          <div class=\"deployment-name\">${service.name}</div>
+                                          <span class=\"namespace\">${service.namespace}</span>
+                                      </div>
+                                      <div>
+                                          <span class=\"status-badge ${statusClass}\">${service.status}</span>
+                                      </div>
+                                  </div>
+                                  <div class=\"deployment-info\">
+                                      <div class=\"info-item\">
+                                          <label>Type</label>
+                                          <div class=\"value\">${service.type}</div>
+                                      </div>
+                                      <div class=\"info-item\">
+                                          <label>Ports</label>
+                                          <div class=\"value\">${service.ports.join(', ') || 'N/A'}</div>
+                                      </div>
+                                      <div class=\"info-item\">
+                                          <label>Endpoints</label>
+                                          <div class=\"value\">${service.endpoints}</div>
+                                      </div>
+                                      <div class=\"info-item\">
+                                          <label>Cluster IP</label>
+                                          <div class=\"value\" style=\"font-size: 12px;\">${service.cluster_ip}</div>
+                                      </div>
+                                  </div>
+                              </div>
+                          `;
+                      }).join('');
+                  }
+                  
+                  function filterDeployments() {
+                      const filter = document.getElementById('deploymentFilter').value.toLowerCase();
+                      const statusFilter = document.getElementById('statusFilter').value;
+                      const cards = document.querySelectorAll('.deployment-card');
+                      
+                      cards.forEach(card => {
+                          const name = card.dataset.name.toLowerCase();
+                          const status = card.dataset.status;
+                          const matchesName = name.includes(filter);
+                          const matchesStatus = !statusFilter || status === statusFilter;
+                          
+                          card.style.display = (matchesName && matchesStatus) ? 'block' : 'none';
+                      });
+                  }
+                  
+                  function filterServices() {
+                      const filter = document.getElementById('serviceFilter').value.toLowerCase();
+                      const cards = document.querySelectorAll('.service-card');
+                      
+                      cards.forEach(card => {
+                          const name = card.dataset.name.toLowerCase();
+                          card.style.display = name.includes(filter) ? 'block' : 'none';
+                      });
+                  }
+                  
+                  loadStatus();
+                  setInterval(loadStatus, 30000);
+              </script>
+          </body>
+          </html>'''
+          
+          @app.route('/')
+          def index():
+              return render_template_string(HTML)
+          
+          @app.route('/api/status')
+          def api_status():
+              deployments = get_deployment_status(None)
+              services = get_service_status(None)
+              return jsonify({
+                  'timestamp': datetime.utcnow().isoformat(),
+                  'deployments': deployments,
+                  'services': services,
+                  'summary': {
+                      'total_deployments': len(deployments),
+                      'healthy_deployments': len([d for d in deployments if d['status'] == 'Healthy']),
+                      'degraded_deployments': len([d for d in deployments if d['status'] == 'Degraded']),
+                      'total_services': len(services),
+                  }
+              })
+          
+          @app.route('/health')
+          def health():
+              return jsonify({'status': 'healthy', 'timestamp': datetime.utcnow().isoformat()})
+          
+          if __name__ == '__main__':
+              app.run(host='0.0.0.0', port=8080)
+          "
+        ports:
+        - containerPort: 8080
+          name: http
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: status-page
+  namespace: monitoring
+  labels:
+    app: status-page
+spec:
+  type: NodePort
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    nodePort: 30088
+    protocol: TCP
+  selector:
+    app: status-page
+

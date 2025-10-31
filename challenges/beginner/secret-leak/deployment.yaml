@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: secret-leak
+  namespace: secret-leak
+  labels:
+    app: secret-leak
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: secret-leak
+  template:
+    metadata:
+      labels:
+        app: secret-leak
+    spec:
+      # Security misconfiguration: no security context
+      containers:
+      - name: web
+        image: python:3.11-slim
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            pip install Flask==3.0.0 &&
+            python /app/app.py
+        workingDir: /app
+        ports:
+        - containerPort: 8080
+          name: http
+        envFrom:
+        - configMapRef:
+            name: secret-leak-config
+        # Oops! We're exposing all ConfigMap data as environment variables
+        # which means sensitive information like API keys and flags are accessible
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        volumeMounts:
+        - name: app-code
+          mountPath: /app
+      volumes:
+      - name: app-code
+        configMap:
+          name: secret-leak-app-code
+

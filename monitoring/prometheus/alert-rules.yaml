@@ -1,0 +1,129 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-alert-rules
+  namespace: monitoring
+  labels:
+    app: prometheus
+data:
+  alerts.yml: |
+    groups:
+    - name: kubernetes
+      interval: 30s
+      rules:
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: |
+          (100 - (avg by (instance) (rate(container_cpu_usage_seconds_total{name!="", container_name!="POD"}[5m])) * 100)) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage detected"
+          description: "Pod {{ $labels.kubernetes_pod_name }} in namespace {{ $labels.kubernetes_namespace }} is using {{ $value }}% CPU"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: |
+          (container_memory_usage_bytes{name!="", container_name!="POD"} / container_spec_memory_limit_bytes) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
+          description: "Pod {{ $labels.kubernetes_pod_name }} is using {{ $value }}% of memory limit"
+
+      # Pod crash loop
+      - alert: PodCrashLooping
+        expr: |
+          rate(kube_pod_container_status_restarts_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pod is crash looping"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is restarting frequently"
+
+      # Pod not ready
+      - alert: PodNotReady
+        expr: |
+          kube_pod_status_phase{phase!="Running"} == 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod not ready"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is not running (phase: {{ $labels.phase }})"
+
+      # Node not ready
+      - alert: NodeNotReady
+        expr: |
+          kube_node_status_condition{condition="Ready",status!="true"} == 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node not ready"
+          description: "Node {{ $labels.node }} is not ready"
+
+    - name: application
+      interval: 30s
+      rules:
+      # High request latency
+      - alert: HighRequestLatency
+        expr: |
+          histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High request latency"
+          description: "99th percentile request latency is {{ $value }}s"
+
+      # High error rate
+      - alert: HighErrorRate
+        expr: |
+          rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate"
+          description: "Error rate is {{ $value | humanizePercentage }}"
+
+      # Service down
+      - alert: ServiceDown
+        expr: |
+          up{job=~".+"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service down"
+          description: "Service {{ $labels.job }} is down"
+
+    - name: resource
+      interval: 30s
+      rules:
+      # Disk usage high
+      - alert: HighDiskUsage
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High disk usage"
+          description: "Disk usage is {{ $value }}% free"
+
+      # Too many pods
+      - alert: TooManyPods
+        expr: |
+          count(kube_pod_info) > 50
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "High pod count"
+          description: "Cluster has {{ $value }} pods"
+

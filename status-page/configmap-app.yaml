@@ -1,0 +1,89 @@
+apiVersion: v1
+data:
+  app.py: "#!/usr/bin/env python3\n\"\"\"\nK3s Status Page - Application Status Monitor\nA
+    simple Flask application that monitors Kubernetes deployments and displays their
+    status\n\"\"\"\n\nfrom flask import Flask, render_template, jsonify, request\nfrom
+    kubernetes import client, config\nfrom kubernetes.client.rest import ApiException\nimport
+    os\nfrom datetime import datetime\nimport json\n\napp = Flask(__name__)\n\n# Try
+    to load kubeconfig, fallback to in-cluster config\ntry:\n    config.load_kube_config()\nexcept:\n
+    \   try:\n        config.load_incluster_config()\n    except:\n        print(\"Warning:
+    Could not load kubeconfig\")\n\nv1 = client.AppsV1Api()\ncore_v1 = client.CoreV1Api()\n\ndef
+    get_deployment_status(namespace=None):\n    \"\"\"Get status of all deployments\"\"\"\n
+    \   try:\n        if namespace:\n            deployments = v1.list_namespaced_deployment(namespace)\n
+    \       else:\n            deployments = v1.list_deployment_for_all_namespaces()\n
+    \       \n        status_list = []\n        for deployment in deployments.items:\n
+    \           metadata = deployment.metadata\n            spec = deployment.spec\n
+    \           status = deployment.status\n            \n            # Get pods for
+    this deployment\n            selector = ','.join([f\"{k}={v}\" for k, v in spec.selector.match_labels.items()])\n
+    \           try:\n                if namespace:\n                    pods = core_v1.list_namespaced_pod(namespace,
+    label_selector=selector)\n                else:\n                    pods = core_v1.list_pod_for_all_namespaces(label_selector=selector)\n
+    \           except:\n                pods = None\n            \n            pod_statuses
+    = []\n            if pods:\n                for pod in pods.items:\n                    pod_status
+    = \"Unknown\"\n                    if pod.status.phase:\n                        pod_status
+    = pod.status.phase\n                    \n                    pod_statuses.append({\n
+    \                       'name': pod.metadata.name,\n                        'status':
+    pod_status,\n                        'ready': any(c.ready for c in pod.status.container_statuses)
+    if pod.status.container_statuses else False,\n                        'restarts':
+    sum(c.restart_count for c in pod.status.container_statuses) if pod.status.container_statuses
+    else 0,\n                        'node': pod.spec.node_name,\n                    })\n
+    \           \n            # Determine overall status\n            overall_status
+    = \"Unknown\"\n            if status.ready_replicas == spec.replicas and status.replicas
+    == spec.replicas:\n                overall_status = \"Healthy\"\n            elif
+    status.replicas < spec.replicas:\n                overall_status = \"Degraded\"\n
+    \           elif status.unavailable_replicas:\n                overall_status
+    = \"Unavailable\"\n            \n            # Get update/rollout status\n            conditions
+    = status.conditions or []\n            update_status = \"Up to date\"\n            for
+    condition in conditions:\n                if condition.type == \"Progressing\":\n
+    \                   if condition.status == \"True\":\n                        update_status
+    = \"Updating\"\n                    else:\n                        update_status
+    = \"Update Failed\"\n                elif condition.type == \"Available\" and
+    condition.status == \"False\":\n                    update_status = \"Unavailable\"\n
+    \           \n            # Get image versions\n            images = [c.image
+    for c in spec.template.spec.containers]\n            \n            status_list.append({\n
+    \               'name': metadata.name,\n                'namespace': metadata.namespace,\n
+    \               'replicas': {\n                    'desired': spec.replicas,\n
+    \                   'ready': status.ready_replicas or 0,\n                    'available':
+    status.available_replicas or 0,\n                    'unavailable': status.unavailable_replicas
+    or 0,\n                },\n                'status': overall_status,\n                'update_status':
+    update_status,\n                'images': images,\n                'pods': pod_statuses,\n
+    \               'created': metadata.creation_timestamp.isoformat() if metadata.creation_timestamp
+    else None,\n                'updated': status.updated_replicas or 0,\n            })\n
+    \       \n        return status_list\n    except ApiException as e:\n        print(f\"Error
+    fetching deployments: {e}\")\n        return []\n    except Exception as e:\n
+    \       print(f\"Unexpected error: {e}\")\n        return []\n\ndef get_service_status(namespace=None):\n
+    \   \"\"\"Get status of all services\"\"\"\n    try:\n        if namespace:\n
+    \           services = core_v1.list_namespaced_service(namespace)\n        else:\n
+    \           services = core_v1.list_service_for_all_namespaces()\n        \n        service_list
+    = []\n        for service in services.items:\n            metadata = service.metadata\n
+    \           spec = service.spec\n            \n            # Get endpoints\n            try:\n
+    \               if namespace:\n                    endpoints = core_v1.read_namespaced_endpoints(metadata.name,
+    namespace)\n                else:\n                    endpoints = core_v1.read_namespaced_endpoints(metadata.name,
+    metadata.namespace)\n                \n                endpoint_count = len(endpoints.subsets[0].addresses)
+    if endpoints.subsets else 0\n            except:\n                endpoint_count
+    = 0\n            \n            service_status = \"Available\" if endpoint_count
+    > 0 else \"No Endpoints\"\n            \n            service_list.append({\n                'name':
+    metadata.name,\n                'namespace': metadata.namespace,\n                'type':
+    spec.type,\n                'ports': [f\"{p.port}/{p.protocol}\" for p in spec.ports
+    or []],\n                'endpoints': endpoint_count,\n                'status':
+    service_status,\n                'cluster_ip': spec.cluster_ip,\n                'external_ip':
+    spec.load_balancer.ingress[0].hostname if spec.load_balancer and spec.load_balancer.ingress
+    else None,\n            })\n        \n        return service_list\n    except
+    ApiException as e:\n        print(f\"Error fetching services: {e}\")\n        return
+    []\n    except Exception as e:\n        print(f\"Unexpected error: {e}\")\n        return
+    []\n\n@app.route('/')\ndef index():\n    \"\"\"Main status page\"\"\"\n    return
+    render_template('index.html')\n\n@app.route('/api/status')\ndef api_status():\n
+    \   \"\"\"API endpoint for status data\"\"\"\n    namespace = request.args.get('namespace',
+    None)\n    \n    deployments = get_deployment_status(namespace)\n    services
+    = get_service_status(namespace)\n    \n    return jsonify({\n        'timestamp':
+    datetime.utcnow().isoformat(),\n        'deployments': deployments,\n        'services':
+    services,\n        'summary': {\n            'total_deployments': len(deployments),\n
+    \           'healthy_deployments': len([d for d in deployments if d['status']
+    == 'Healthy']),\n            'degraded_deployments': len([d for d in deployments
+    if d['status'] == 'Degraded']),\n            'total_services': len(services),\n
+    \       }\n    })\n\n@app.route('/health')\ndef health():\n    \"\"\"Health check
+    endpoint\"\"\"\n    return jsonify({'status': 'healthy', 'timestamp': datetime.utcnow().isoformat()})\n\nif
+    __name__ == '__main__':\n    app.run(host='0.0.0.0', port=8080, debug=False)\n\n"
+kind: ConfigMap
+metadata:
+  name: status-page-app
+  namespace: monitoring

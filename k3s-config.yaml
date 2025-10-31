@@ -1,0 +1,31 @@
+# K3s Configuration File
+# Place this in /etc/rancher/k3s/config.yaml for custom configuration
+
+# Disable default ingress controller (Traefik)
+# disable: traefik
+
+# Disable default service load balancer
+# disable: servicelb
+
+# Configure CNI plugin (default: flannel)
+# cni: flannel
+
+# API server arguments
+# kube-apiserver-arg:
+#   - "audit-log-maxage=30"
+#   - "audit-log-maxbackup=10"
+
+# Kubelet extra arguments for resource limits
+# kubelet-arg:
+#   - "max-pods=110"
+
+# Cluster CIDR (default: 10.42.0.0/16)
+# cluster-cidr: "10.42.0.0/16"
+
+# Service CIDR (default: 10.43.0.0/16)
+# service-cidr: "10.43.0.0/16"
+
+# This file serves as a template for advanced k3s configuration.
+# To apply these settings, copy this file to /etc/rancher/k3s/config.yaml
+# and uncomment the desired options, then restart k3s: sudo systemctl restart k3s
+

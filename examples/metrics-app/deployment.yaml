@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metrics-demo
+  namespace: default
+  labels:
+    app: metrics-demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: metrics-demo
+  template:
+    metadata:
+      labels:
+        app: metrics-demo
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: metrics-demo
+        image: nginx/nginx-prometheus-exporter:0.11.0
+        args:
+          - '-nginx.scrape-uri=http://localhost:80/nginx_status'
+        ports:
+        - containerPort: 9113
+          name: metrics
+        - containerPort: 80
+          name: http
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+          name: http
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/conf.d
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: nginx-status-config
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-status-config
+  namespace: default
+data:
+  status.conf: |
+    server {
+        listen 80;
+        location /nginx_status {
+            stub_status on;
+            access_log off;
+            allow all;
+        }
+        location / {
+            return 200 "Metrics Demo App\n";
+            add_header Content-Type text/plain;
+        }
+    }
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: metrics-demo
+  namespace: default
+  labels:
+    app: metrics-demo
+spec:
+  type: NodePort
+  ports:
+  - port: 80
+    targetPort: 80
+    nodePort: 30180
+    name: http
+  - port: 9113
+    targetPort: 9113
+    nodePort: 30113
+    name: metrics
+  selector:
+    app: metrics-demo
+
